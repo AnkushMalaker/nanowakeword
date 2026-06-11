@@ -62,7 +62,16 @@ matplotlib.use('Agg')
 warnings.filterwarnings("ignore")
 logging.getLogger("torchaudio").setLevel(logging.ERROR)
 
-SEED=10
+# Training seed — override per run with NWW_SEED to train candidate model
+# variants; identical seeds reproduce identical models.
+SEED = int(os.environ.get("NWW_SEED", "10"))
+if os.environ.get("NWW_DETERMINISTIC") == "1":
+    # NOTE: this module ignores warnings, so warn_only mode is SILENT —
+    # NWW_DET_STRICT=1 raises at the first nondeterministic op instead.
+    torch.use_deterministic_algorithms(
+        True, warn_only=os.environ.get("NWW_DET_STRICT") != "1")
+
+
 def set_seed(seed):
     """
     This function sets the seed to make the training results reliable.

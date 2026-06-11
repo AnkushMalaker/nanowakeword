@@ -40,7 +40,16 @@ from nanowakeword.utils.logger import print_info, print_key_value, print_final_r
 warnings.filterwarnings("ignore")
 logging.getLogger("torchaudio").setLevel(logging.ERROR)
 
-SEED=10
+# Training seed — override per run with NWW_SEED to train candidate model
+# variants; identical seeds reproduce identical models.
+SEED = int(os.environ.get("NWW_SEED", "10"))
+if os.environ.get("NWW_DETERMINISTIC") == "1":
+    # NOTE: this module ignores warnings, so warn_only mode is SILENT —
+    # NWW_DET_STRICT=1 raises at the first nondeterministic op instead.
+    torch.use_deterministic_algorithms(
+        True, warn_only=os.environ.get("NWW_DET_STRICT") != "1")
+
+
 def set_seed(seed):
     """
     This function sets the seed to make the training results reliable.
@@ -605,6 +614,28 @@ class Trainer:
 
             # Use the 'total_loss' for history and EMA calculation
             current_loss = total_loss.detach().cpu().item()
+
+            # Determinism debug hook: log per-step batch-index hash + loss so two
+            # runs can be diffed to locate the first divergent step (NWW_DET_LOG).
+            _det_log = os.environ.get("NWW_DET_LOG")
+            if _det_log:
+                import hashlib as _hl
+                _idx = indices.tolist()
+                _oh = _hl.md5(np.array(_idx, dtype=np.int64).tobytes()).hexdigest()[:10]
+                _sh = _hl.md5(np.array(sorted(_idx), dtype=np.int64).tobytes()).hexdigest()[:10]
+                _hh = _hl.md5(X.dataset.sample_hardness.numpy().tobytes()).hexdigest()[:10]
+                _rh = _hl.md5(torch.random.get_rng_state().numpy().tobytes()).hexdigest()[:10]
+                _bh = _hl.md5(raw_bce.detach().cpu().numpy().tobytes()).hexdigest()[:10]
+                with open(_det_log, "a") as _f:
+                    _f.write(f"{step_ndx} order={_oh} set={_sh} hard={_hh} rng={_rh} "
+                             f"bce={_bh} loss={current_loss:.10f}\n")
+                if step_ndx < 4:
+                    with open(_det_log + ".grads", "a") as _f:
+                        for _n, _p in self.model.named_parameters():
+                            if _p.grad is not None:
+                                _gh = _hl.md5(_p.grad.detach().cpu().numpy().tobytes()).hexdigest()[:10]
+                                _wh = _hl.md5(_p.detach().cpu().numpy().tobytes()).hexdigest()[:10]
+                                _f.write(f"{step_ndx} {_n} g={_gh} w={_wh}\n")
 
             if current_loss is not None:
                 self.model.history["loss"].append(current_loss)
