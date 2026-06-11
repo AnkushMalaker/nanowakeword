@@ -128,7 +128,7 @@ def distill_model(
     print_info(f"[Distillation] Alpha (soft)   : {alpha}")
 
     # Optimizer
-    all_params = list(student.parameters()) + list(student.classifier.parameters())
+    all_params = list(student.parameters())  # wrapper already includes the classifier; duplicating raced AdamW foreach + double-stepped it
     optimizer  = torch.optim.AdamW(all_params, lr=lr, weight_decay=1e-3)
     scheduler  = torch.optim.lr_scheduler.OneCycleLR(
         optimizer, max_lr=lr, total_steps=steps
@@ -283,7 +283,7 @@ def distill_from_onnx(
 
     # Optimizer
     import itertools
-    all_params = list(student.parameters()) + list(student.classifier.parameters())
+    all_params = list(student.parameters())  # wrapper already includes the classifier; duplicating raced AdamW foreach + double-stepped it
     optimizer  = torch.optim.AdamW(all_params, lr=lr, weight_decay=1e-3)
     scheduler  = torch.optim.lr_scheduler.OneCycleLR(
         optimizer, max_lr=lr, total_steps=steps

@@ -82,9 +82,13 @@ class Trainer:
             Sets up the optimizer and the learning rate scheduler based on the
             provided configuration. Supports multiple scheduler types.
             """
-            from itertools import chain
-
-            all_params = chain(self.model.parameters(), self.model.classifier.parameters())
+            # self.model is the wrapper Module and its .parameters() ALREADY
+            # yields the classifier's parameters. Chaining classifier.parameters()
+            # on top duplicated them in the optimizer list, which (a) double-steps
+            # the classifier each iteration and (b) makes AdamW's foreach
+            # multi-tensor kernels race on the duplicated tensors -> run-to-run
+            # nondeterminism (PyTorch warns; the warning was filtered).
+            all_params = list(self.model.parameters())
 
             optimizer_type = self.config.get("optimizer_type", "adamw").lower() 
             learning_rate = self.config.get('learning_rate_max', 1e-4)
@@ -552,8 +556,10 @@ class Trainer:
 
             total_loss.backward()
 
+            # wrapper .parameters() already includes the classifier — duplicating
+            # them counted classifier grads twice in the norm.
             grad_norm = torch.nn.utils.clip_grad_norm_(
-                        list(self.model.parameters()) + list(self.model.classifier.parameters()),
+                        list(self.model.parameters()),
                         max_norm=1.0
                     )
 
