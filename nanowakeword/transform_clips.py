@@ -34,7 +34,10 @@ from nanowakeword.data.AudioFeatures import AudioFeatures
 from nanowakeword.utils.logger import print_step_header, print_info, print_warning
 
 
-SEED=10
+# Training seed — override per run with NWW_SEED (see trainer.py); this
+# module is lazily imported mid-pipeline, so it must re-read the SAME env
+# seed rather than silently resetting the RNG to a constant.
+SEED = int(os.environ.get("NWW_SEED", "10"))
 def set_seed(seed):
     """
     This function sets the seed to make the training results reliable.
