@@ -108,7 +108,12 @@ class AudioFeatures():
         self.melspectrogram_max_len = 10*97  # 97 is the number of frames in 1 second of 16hz audio
         self.accumulated_samples = 0  # the samples added to the buffer since the audio preprocessor was last called
         self.raw_data_remainder = np.empty(0)
-        self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
+        # Warm-up buffer must be DETERMINISTIC: an unseeded randint here (and
+        # in reset()) made early-window scores vary per process/per reset,
+        # which jittered streaming evals and cold replays. Fixed-seed RNG
+        # keeps the same warm-up statistics, reproducibly.
+        self.feature_buffer = self._get_embeddings(
+            np.random.default_rng(0).integers(-1000, 1000, 16000*4).astype(np.int16))
         self.feature_buffer_max_len = 120  # ~10 seconds of feature buffer history
 
 
@@ -119,7 +124,9 @@ class AudioFeatures():
         self.melspectrogram_buffer = np.ones((76, 32))
         self.accumulated_samples = 0
         self.raw_data_remainder = np.empty(0)
-        self.feature_buffer = self._get_embeddings(np.random.randint(-1000, 1000, 16000*4).astype(np.int16))
+        # Deterministic warm-up (see __init__) — reset() must reproduce it too.
+        self.feature_buffer = self._get_embeddings(
+            np.random.default_rng(0).integers(-1000, 1000, 16000*4).astype(np.int16))
 
     def _get_melspectrogram(self, x: Union[np.ndarray, List], melspec_transform: Callable = lambda x: x/10 + 2):
         """
